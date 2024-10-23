@@ -76,7 +76,7 @@ def diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_r
 t = 10.0  # Slab thickness in cm
 num_mesh_points = 100
 sigma_t = 1.0  # Total cross-section
-sigma_s_ratios = [0.5, 0.8, 0.9, 0.99, 1]  # Ratio of sigma_s to sigma_t
+sigma_s_ratios = [0.5, 0.8, 0.9, 0.99, 0.999]  # Ratio of sigma_s to sigma_t
 sigma_s_ratio = 0.9
 Q = 1.0  # Fixed source
 LB = 0  # Left boundary (vacuum)
