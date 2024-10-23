@@ -74,14 +74,15 @@ def diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_r
 
 # Example usage of diffusion_solver_1D_optimized
 t = 10.0  # Slab thickness in cm
-num_mesh_points = 1000
+num_mesh_points = 100
 sigma_t = 1.0  # Total cross-section
 sigma_s_ratios = [0.5, 0.8, 0.9, 0.99, 1]  # Ratio of sigma_s to sigma_t
+sigma_s_ratio = 0.9
 Q = 1.0  # Fixed source
 LB = 0  # Left boundary (vacuum)
 RB = 0  # Right boundary (vacuum)
 tol = 1e-6  # Convergence tolerance
-max_iterations = 1000  # Maximum number of iterations
+max_iterations = 1000000  # Maximum number of iterations
 
 # Create a plot
 plt.figure(figsize=(10, 5))
@@ -92,29 +93,28 @@ for sigma_s_ratio in sigma_s_ratios:
     plt.plot(x, phi, label=f'$\Sigma_s / \Sigma_t$ = {sigma_s_ratio}')
 
 # Plot settings
-plt.xlabel('Position (cm)')
-plt.ylabel('Neutron Flux $\phi$')
+plt.xlabel('x')
+plt.ylabel('$\phi$')
 plt.title('1D Diffusion Solution for Different $\Sigma_s / \Sigma_t$ Ratios')
 plt.legend()
 plt.grid(True)
 plt.show()
 
-'''
 x, phi, residuals = diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
 
 # Plot the solution
 plt.figure(figsize=(10, 5))
-plt.plot(x, phi, label='Neutron Flux $\phi$', marker='o')
-plt.xlabel('Position (cm)')
-plt.ylabel('Neutron Flux $\phi$')
-plt.title('1D Diffusion Solution with Vacuum Boundary (Optimized)')
+plt.plot(x, phi, label='$\phi$')
+plt.xlabel('x')
+plt.ylabel('$\phi$')
+plt.title('1D Diffusion Solution with Vacuum Boundary')
 plt.legend()
 plt.grid(True)
 plt.show()
 
 # Plot the residuals
 plt.figure(figsize=(10, 5))
-plt.plot(range(len(residuals)), residuals, label='Residual (Error)', marker='x')
+plt.plot(range(len(residuals)), residuals, label='Residual (Error)')
 plt.title('Residual vs Iteration (Gauss-Seidel) - Optimized')
 plt.xlabel('Iteration')
 plt.ylabel('Residual (Error)')
@@ -122,4 +122,3 @@ plt.yscale('log')  # Log scale to observe convergence
 plt.legend()
 plt.grid(True)
 plt.show()
-'''
