@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from iterative_solvers import Gauss_Seidel
+from iterative_solvers import Gauss_Seidel_optimized
 from time import time 
   
   
@@ -16,9 +16,9 @@ def timer_func(func):
     return wrap_func
 
 @timer_func
-def diffusion_solver_1D(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations):
+def diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations):
     """
-    Solves the 1D diffusion equation using Gauss-Seidel method with vacuum boundary conditions.
+    Optimized 1D diffusion solver using Gauss-Seidel method with vacuum boundary conditions.
     
     Parameters:
     t               : Thickness of the slab
@@ -42,53 +42,72 @@ def diffusion_solver_1D(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, t
     sigma_s = sigma_s_ratio * sigma_t
     sigma_a = sigma_t - sigma_s  # Absorption cross-section
 
-    # Initialize coefficient matrix A and right-hand side vector b
-    A = np.zeros((new_num_mesh_points, new_num_mesh_points))
-    b = np.full(new_num_mesh_points, Q)
+    # Initialize diagonals for the tridiagonal matrix
+    lower_diag = np.zeros(new_num_mesh_points - 1)  # A[i, i-1]
+    main_diag = np.zeros(new_num_mesh_points)       # A[i, i]
+    upper_diag = np.zeros(new_num_mesh_points - 1)  # A[i, i+1]
+    b = np.full(new_num_mesh_points, Q)  # Right-hand side vector
 
     # Apply vacuum boundary conditions
-    A[0, 0] = 1  # Left boundary (vacuum)
-    A[-1, -1] = 1  # Right boundary (vacuum)
+    main_diag[0] = 1  # Left boundary (vacuum)
+    main_diag[-1] = 1  # Right boundary (vacuum)
     b[0] = LB
     b[-1] = RB
 
     # Set up the internal grid points for the diffusion equation
     for i in range(1, new_num_mesh_points - 1):
-        A[i, i - 1] = -1 / dx**2 / (3 * sigma_t)  
-        A[i, i] = (2 / dx**2 / (3 * sigma_t) + sigma_a)
-        A[i, i + 1] = -1 / dx**2 / (3 * sigma_t)  
+        lower_diag[i - 1] = -1 / dx**2 / (3 * sigma_t)  # A[i, i-1]
+        main_diag[i] = (2 / dx**2 / (3 * sigma_t) + sigma_a)  # A[i, i]
+        upper_diag[i] = -1 / dx**2 / (3 * sigma_t)  # A[i, i+1]
 
     # Initial guess for the neutron flux
     Phi = np.zeros(new_num_mesh_points)
 
-    # Solve using the Gauss-Seidel method
-    Phi, residuals = Gauss_Seidel(A, b, Phi, tol, max_iterations)
+    # Solve using the optimized Gauss-Seidel method
+    Phi, residuals = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b, Phi, tol, max_iterations)
 
     # Spatial grid points
-    x = np.linspace(-D, t+D, new_num_mesh_points)
+    x = np.linspace(-D, t + D, new_num_mesh_points)
 
     return x, Phi, residuals
 
-# Example usage of diffusion_solver_1D
+
+# Example usage of diffusion_solver_1D_optimized
 t = 10.0  # Slab thickness in cm
 num_mesh_points = 1000
 sigma_t = 1.0  # Total cross-section
-sigma_s_ratio = 0.9  # Ratio of sigma_s to sigma_t
+sigma_s_ratios = [0.5, 0.8, 0.9, 0.99, 1]  # Ratio of sigma_s to sigma_t
 Q = 1.0  # Fixed source
 LB = 0  # Left boundary (vacuum)
 RB = 0  # Right boundary (vacuum)
 tol = 1e-6  # Convergence tolerance
 max_iterations = 1000  # Maximum number of iterations
 
-x, phi, residuals = diffusion_solver_1D(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
+# Create a plot
+plt.figure(figsize=(10, 5))
+
+# Loop through each sigma_s_ratio, solve the diffusion equation, and plot the results
+for sigma_s_ratio in sigma_s_ratios:
+    x, phi, residuals = diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
+    plt.plot(x, phi, label=f'$\Sigma_s / \Sigma_t$ = {sigma_s_ratio}')
+
+# Plot settings
+plt.xlabel('Position (cm)')
+plt.ylabel('Neutron Flux $\phi$')
+plt.title('1D Diffusion Solution for Different $\Sigma_s / \Sigma_t$ Ratios')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+'''
+x, phi, residuals = diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
 
 # Plot the solution
-
 plt.figure(figsize=(10, 5))
 plt.plot(x, phi, label='Neutron Flux $\phi$', marker='o')
 plt.xlabel('Position (cm)')
 plt.ylabel('Neutron Flux $\phi$')
-plt.title('1D Diffusion Solution with Vacuum Boundary')
+plt.title('1D Diffusion Solution with Vacuum Boundary (Optimized)')
 plt.legend()
 plt.grid(True)
 plt.show()
@@ -96,10 +115,11 @@ plt.show()
 # Plot the residuals
 plt.figure(figsize=(10, 5))
 plt.plot(range(len(residuals)), residuals, label='Residual (Error)', marker='x')
-plt.title('Residual vs Iteration (Gauss-Seidel)')
+plt.title('Residual vs Iteration (Gauss-Seidel) - Optimized')
 plt.xlabel('Iteration')
 plt.ylabel('Residual (Error)')
 plt.yscale('log')  # Log scale to observe convergence
 plt.legend()
 plt.grid(True)
 plt.show()
+'''
