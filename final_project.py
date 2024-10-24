@@ -71,21 +71,21 @@ def diffusion_solver_1D(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, t
 
 # Example usage of diffusion_solver_1D
 t = 10.0  # Slab thickness in cm
-num_mesh_points = 1000
+num_mesh_points = 100
 sigma_t = 1.0  # Total cross-section
 sigma_s_ratio = 0.9  # Ratio of sigma_s to sigma_t
 Q = 1.0  # Fixed source
 LB = 0  # Left boundary (vacuum)
 RB = 0  # Right boundary (vacuum)
 tol = 1e-6  # Convergence tolerance
-max_iterations = 1000  # Maximum number of iterations
+max_iterations = 10000  # Maximum number of iterations
 
 x, phi, residuals = diffusion_solver_1D(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
 
 # Plot the solution
 
 plt.figure(figsize=(10, 5))
-plt.plot(x, phi, label='Neutron Flux $\phi$', marker='o')
+plt.plot(x, phi, label='Neutron Flux $\phi$')
 plt.xlabel('Position (cm)')
 plt.ylabel('Neutron Flux $\phi$')
 plt.title('1D Diffusion Solution with Vacuum Boundary')
@@ -95,7 +95,7 @@ plt.show()
 
 # Plot the residuals
 plt.figure(figsize=(10, 5))
-plt.plot(range(len(residuals)), residuals, label='Residual (Error)', marker='x')
+plt.plot(range(len(residuals)), residuals, label='Residual (Error)')
 plt.title('Residual vs Iteration (Gauss-Seidel)')
 plt.xlabel('Iteration')
 plt.ylabel('Residual (Error)')
