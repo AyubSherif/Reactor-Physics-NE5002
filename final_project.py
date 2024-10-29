@@ -2,11 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from iterative_solvers import Gauss_Seidel_optimized
 from time import time 
-  
-  
+
 def timer_func(func): 
-    # This function shows the execution time of  
-    # the function object passed 
     def wrap_func(*args, **kwargs): 
         t1 = time() 
         result = func(*args, **kwargs) 
@@ -16,106 +13,110 @@ def timer_func(func):
     return wrap_func
 
 @timer_func
-def diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations):
+def diffusion_solver_1D_heterogeneous(t, num_mesh_points, LB, RB, material_props, Q, tol, max_iterations):
     """
-    Optimized 1D diffusion solver using Gauss-Seidel method with vacuum boundary conditions.
-    
+    1D diffusion solver for heterogeneous media using Gauss-Seidel with vacuum boundary conditions.
+
     Parameters:
-    t               : Thickness of the slab
+    t               : Total thickness of the slab
     num_mesh_points : Number of mesh points
-    sigma_t         : Total cross-section
-    sigma_s_ratio   : Ratio of sigma_s to sigma_t
-    Q               : Fixed source
+    LB, RB          : Boundary conditions (vacuum)
+    material_props  : List of dictionaries with material properties, each with:
+                      {'start': start_position, 'end': end_position, 
+                       'sigma_t': total cross-section, 'sigma_s_ratio': scattering-to-total cross-section ratio}
+    Q               : Fixed source in each region
     tol             : Convergence tolerance
     max_iterations  : Maximum number of iterations allowed
-    
+
     Returns:
     x               : Spatial domain (mesh points)
     phi             : Neutron flux solution
     residuals       : Convergence history (residuals per iteration)
     """
-    dx = t / (num_mesh_points - 1)  # Step size
-    D = 1 / (3 * sigma_t)  # Diffusion coefficient
-    new_t = t + 2*D
-    new_num_mesh_points = int(new_t / dx) + 1
+    dx = t / (num_mesh_points - 1)
+    x = np.linspace(0, t, num_mesh_points)
     
-    sigma_s = sigma_s_ratio * sigma_t
-    sigma_a = sigma_t - sigma_s  # Absorption cross-section
+    # Initialize arrays for cross-sections based on material properties
+    sigma_t = np.zeros(num_mesh_points)
+    sigma_a = np.zeros(num_mesh_points)
+    D = np.zeros(num_mesh_points)  # Diffusion coefficient
+    b = np.full(num_mesh_points, Q)  # Source term for each mesh point
+    
+    # Assign cross-section values based on material properties for heterogeneous regions
+    for material in material_props:
+        start_idx = int(material['start'] / dx)
+        end_idx = int(material['end'] / dx) + 1
+        sigma_t[start_idx:end_idx] = material['sigma_t']
+        sigma_s = material['sigma_s_ratio'] * material['sigma_t']
+        sigma_a[start_idx:end_idx] = material['sigma_t'] - sigma_s
+        D[start_idx:end_idx] = 1 / (3 * material['sigma_t'])
 
     # Initialize diagonals for the tridiagonal matrix
-    lower_diag = np.zeros(new_num_mesh_points - 1)  # A[i, i-1]
-    main_diag = np.zeros(new_num_mesh_points)       # A[i, i]
-    upper_diag = np.zeros(new_num_mesh_points - 1)  # A[i, i+1]
-    b = np.full(new_num_mesh_points, Q)  # Right-hand side vector
+    lower_diag = np.zeros(num_mesh_points - 1)
+    main_diag = np.zeros(num_mesh_points)
+    upper_diag = np.zeros(num_mesh_points - 1)
+
+    # Set up the internal grid points for the diffusion equation
+    for i in range(1, num_mesh_points - 1):
+        # Calculate average diffusion coefficients across the left and right interfaces
+        D_left = (D[i] + D[i - 1]) / 2  # Between i and i-1
+        D_right = (D[i] + D[i + 1]) / 2  # Between i and i+1
+
+        # Lower diagonal (A[i, i-1]), represents -D_left / dx^2 * phi_{i-1}
+        lower_diag[i - 1] = -D_left / dx**2
+        
+        # Main diagonal (A[i, i]), combines D_left and D_right terms and sigma_a * phi_i
+        main_diag[i] = (D_left + D_right) / dx**2 + sigma_a[i]
+        
+        # Upper diagonal (A[i, i+1]), represents -D_right / dx^2 * phi_{i+1}
+        upper_diag[i] = -D_right / dx**2
 
     # Apply vacuum boundary conditions
-    main_diag[0] = 1  # Left boundary (vacuum)
-    main_diag[-1] = 1  # Right boundary (vacuum)
+    main_diag[0] = 1
+    main_diag[-1] = 1
     b[0] = LB
     b[-1] = RB
 
-    # Set up the internal grid points for the diffusion equation
-    for i in range(1, new_num_mesh_points - 1):
-        lower_diag[i - 1] = -1 / dx**2 / (3 * sigma_t)  # A[i, i-1]
-        main_diag[i] = (2 / dx**2 / (3 * sigma_t) + sigma_a)  # A[i, i]
-        upper_diag[i] = -1 / dx**2 / (3 * sigma_t)  # A[i, i+1]
-
     # Initial guess for the neutron flux
-    Phi = np.zeros(new_num_mesh_points)
+    Phi = np.zeros(num_mesh_points)
 
     # Solve using the optimized Gauss-Seidel method
     Phi, residuals = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b, Phi, tol, max_iterations)
 
-    # Spatial grid points
-    x = np.linspace(-D, t + D, new_num_mesh_points)
-
     return x, Phi, residuals
 
-
-# Example usage of diffusion_solver_1D_optimized
-t = 10.0  # Slab thickness in cm
+# Example usage of the solver for heterogeneous media
+t = 10.0  # Total slab thickness in cm
 num_mesh_points = 100
-sigma_t = 1.0  # Total cross-section
-sigma_s_ratios = [0.5, 0.8, 0.9, 0.99, 0.999]  # Ratio of sigma_s to sigma_t
-sigma_s_ratio = 0.9
-Q = 1.0  # Fixed source
 LB = 0  # Left boundary (vacuum)
 RB = 0  # Right boundary (vacuum)
+Q = 1.0  # Fixed source
 tol = 1e-6  # Convergence tolerance
 max_iterations = 1000000  # Maximum number of iterations
 
-# Create a plot
+# Define material properties for heterogeneous regions
+material_props = [
+    {'start': 0, 'end': 5, 'sigma_t': 1.0, 'sigma_s_ratio': 0.9},
+    {'start': 5, 'end': 10, 'sigma_t': 2.0, 'sigma_s_ratio': 0.8}
+]
+
+# Run the solver
+x, phi, residuals = diffusion_solver_1D_heterogeneous(t, num_mesh_points, LB, RB, material_props, Q, tol, max_iterations)
+
+# Plot the neutron flux distribution
 plt.figure(figsize=(10, 5))
-
-# Loop through each sigma_s_ratio, solve the diffusion equation, and plot the results
-for sigma_s_ratio in sigma_s_ratios:
-    x, phi, residuals = diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
-    plt.plot(x, phi, label=f'$\Sigma_s / \Sigma_t$ = {sigma_s_ratio}')
-
-# Plot settings
-plt.xlabel('x')
+plt.plot(x, phi, label='Neutron Flux $\phi$')
+plt.xlabel('x (cm)')
 plt.ylabel('$\phi$')
-plt.title('1D Diffusion Solution for Different $\Sigma_s / \Sigma_t$ Ratios')
+plt.title('1D Diffusion Solution for Heterogeneous Media')
 plt.legend()
 plt.grid(True)
 plt.show()
 
-x, phi, residuals = diffusion_solver_1D_optimized(t, num_mesh_points, LB, RB, sigma_t, sigma_s_ratio, Q, tol, max_iterations)
-
-# Plot the solution
-plt.figure(figsize=(10, 5))
-plt.plot(x, phi, label='$\phi$')
-plt.xlabel('x')
-plt.ylabel('$\phi$')
-plt.title('1D Diffusion Solution with Vacuum Boundary')
-plt.legend()
-plt.grid(True)
-plt.show()
-
-# Plot the residuals
+# Plot the residuals to check convergence
 plt.figure(figsize=(10, 5))
 plt.plot(range(len(residuals)), residuals, label='Residual (Error)')
-plt.title('Residual vs Iteration (Gauss-Seidel) - Optimized')
+plt.title('Residual vs Iteration (Gauss-Seidel) - Heterogeneous Media')
 plt.xlabel('Iteration')
 plt.ylabel('Residual (Error)')
 plt.yscale('log')  # Log scale to observe convergence
