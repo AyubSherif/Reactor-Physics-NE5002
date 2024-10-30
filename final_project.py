@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel
+from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel, Jacobi_solver_vectorized, multigrid_v_cycle
 
 def main():
     # Get user inputs
@@ -210,18 +210,20 @@ def diffusion_solver_1D(t, num_mesh_points, material_props, Q, left_boundary, ri
         b[-1] = 0
 
     # Initial guess for neutron flux
-    Phi_G = np.zeros(new_num_mesh_points)
-    Phi_J = np.zeros(new_num_mesh_points)
-    Phi_JP = np.zeros(new_num_mesh_points)
-
+    #Phi_G = np.zeros(new_num_mesh_points)
+    #Phi_J = np.zeros(new_num_mesh_points)
+    #Phi_JP = np.zeros(new_num_mesh_points)
+    Phi_JV = np.zeros(new_num_mesh_points)
+    Phi = np.zeros(new_num_mesh_points)
 
     # Solve using Gauss-Seidel method
-    Phi_G, residuals = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b, Phi_G, tol, max_iterations)
-    Phi_J, residuals = Jacobi_solver(lower_diag, main_diag, upper_diag, b, Phi_J, tol, max_iterations)
-    Phi_JP, residuals = Jacobi_solver_parallel(lower_diag, main_diag, upper_diag, b, Phi_JP, tol, max_iterations)
+    #Phi_G, residuals = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b, Phi_G, tol, max_iterations)
+    #Phi_J, residuals = Jacobi_solver(lower_diag, main_diag, upper_diag, b, Phi_J, tol, max_iterations)
+    Phi_JV, residuals = Jacobi_solver_vectorized(lower_diag, main_diag, upper_diag, b, Phi_JV, tol, max_iterations)
+    #Phi_JP, residuals = Jacobi_solver_parallel(lower_diag, main_diag, upper_diag, b, Phi_JP, tol, max_iterations)
+    Phi = multigrid_v_cycle(lower_diag, main_diag, upper_diag, b, Phi_JV, tol, max_iterations)
 
-
-    return x, Phi_G, residuals
+    return x, Phi, residuals
 
 # Run the main function only if this script is executed directly
 if __name__ == "__main__":
