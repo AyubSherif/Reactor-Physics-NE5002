@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel, Jacobi_solver_vectorized, multigrid_v_cycle,direct_solver
+from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel, Jacobi_solver_vectorized
 
 def main():
     # Get user inputs
-    t, Q, num_mesh_points, left_boundary, right_boundary, material_props = get_user_input()
+    t, num_mesh_points, left_boundary, right_boundary, material_props = get_user_input()
 
     # Run the solver
-    x, phi, residuals = diffusion_solver_1D(t, num_mesh_points, material_props, Q, left_boundary, right_boundary)
+    x, phi, residuals = diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right_boundary)
 
     # Plot the results (optional)
     plt.plot(x, phi, label='Neutron Flux')
@@ -41,14 +41,6 @@ def get_user_input():
             break
         except ValueError as e:
             print(f"Invalid input: {e}")
-    
-    # Validate fixed source (Q)
-    while True:
-        try:
-            Q = float(input("Enter the fixed source strength: "))
-            break
-        except ValueError:
-            print("Invalid input: Fixed source strength must be a number.")
     
     # Validate number of mesh points
     while True:
@@ -121,15 +113,28 @@ def get_user_input():
                 break
             except ValueError as e:
                 print(f"Invalid input: {e}")
+        
+        # Validate fixed source strength for the medium
+        while True:
+            try:
+                Q_i = float(input(f"  Fixed source strength for medium {i + 1}: "))
+                break
+            except ValueError:
+                print("Invalid input: Fixed source strength must be a number.")
 
         # Append material properties and update last_end for the next material
-        material_props.append({'start': start, 'end': end, 'sigma_t': sigma_t, 'sigma_s_ratio': sigma_s_ratio})
+        material_props.append({
+            'start': start, 
+            'end': end, 
+            'sigma_t': sigma_t, 
+            'sigma_s_ratio': sigma_s_ratio, 
+            'Q': Q_i
+        })
         last_end = end  # Update end for the next material's start
 
+    return t, num_mesh_points, left_boundary, right_boundary, material_props
 
-    return t, Q, num_mesh_points, left_boundary, right_boundary, material_props
-
-def diffusion_solver_1D(t, num_mesh_points, material_props, Q, left_boundary, right_boundary, tol=1e-6, max_iterations=1000000):
+def diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right_boundary, tol=1e-6, max_iterations=1000000):
     """
     1D diffusion solver for heterogeneous media with user-defined boundary conditions.
     
@@ -167,18 +172,26 @@ def diffusion_solver_1D(t, num_mesh_points, material_props, Q, left_boundary, ri
     sigma_t = np.zeros(new_num_mesh_points)
     sigma_a = np.zeros(new_num_mesh_points)
     D = np.zeros(new_num_mesh_points)
-    b = np.full(new_num_mesh_points, Q)
+    # Initialize the source array `b` with zeros
+    b = np.zeros(new_num_mesh_points)
 
-    # Populate material properties for each region
+    # Populate material properties and source for each region
     for i in range(new_num_mesh_points):
         position = i * dx - D_left  # Adjust position for vacuum left side
+    
+        # Iterate through the materials to find which region the current position falls into
         for material in material_props:
             if material['start'] - D_left <= position <= material['end'] + (D_right if material == material_props[-1] else 0):
+                # Populate material properties
                 sigma_t[i] = material['sigma_t']
                 sigma_s = material['sigma_s_ratio'] * material['sigma_t']
                 sigma_a[i] = material['sigma_t'] - sigma_s
                 D[i] = 1 / (3 * material['sigma_t'])
+                
+                # Assign the fixed source strength for the region
+                b[i] = material['Q']
                 break
+
 
     # Initialize tridiagonal matrix components
     lower_diag = np.zeros(new_num_mesh_points - 1)
@@ -210,19 +223,16 @@ def diffusion_solver_1D(t, num_mesh_points, material_props, Q, left_boundary, ri
         b[-1] = 0
 
     # Initial guess for neutron flux
-    #Phi_G = np.zeros(new_num_mesh_points)
-    #Phi_J = np.zeros(new_num_mesh_points)
-    #Phi_JP = np.zeros(new_num_mesh_points)
-    Phi_JV = np.zeros(new_num_mesh_points)
+    Phi = np.zeros(new_num_mesh_points)
     A = np.zeros((new_num_mesh_points, new_num_mesh_points))
     np.fill_diagonal(A, main_diag)  # Fill main diagonal
     np.fill_diagonal(A[1:], lower_diag)  # Fill lower diagonal
     np.fill_diagonal(A[:, 1:], upper_diag)  # Fill upper diagonal
 
     # Solve using Gauss-Seidel method
-    Phi_JV, residuals = Jacobi_solver_vectorized(lower_diag, main_diag, upper_diag, b, Phi_JV, tol, max_iterations)
+    Phi, residuals = Jacobi_solver_vectorized(lower_diag, main_diag, upper_diag, b, Phi, tol, max_iterations)
 
-    return x, Phi_JV, residuals
+    return x, Phi, residuals
 
 # Run the main function only if this script is executed directly
 if __name__ == "__main__":
