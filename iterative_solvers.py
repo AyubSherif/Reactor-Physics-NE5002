@@ -350,3 +350,7 @@ def multigrid_v_cycle(lower_diag, main_diag, upper_diag, b, Phi, tol, max_depth,
     Phi = jacobi_step(lower_diag, main_diag, upper_diag, b, Phi, iterations=smooth_iterations)
 
     return Phi
+
+@timer_func
+def direct_solver(A, b):
+    return np.linalg.solve(A, b)
