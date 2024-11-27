@@ -3,11 +3,20 @@ import matplotlib.pyplot as plt
 from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel, Jacobi_solver_vectorized
 
 def main():
-    # Get user inputs
-    t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations, source_type = get_user_input()
+
+    # Determine the type of problem
+    while True:
+        source_type = input("Enter the type of problem (f for fission source, anything else for fixed source): ").strip().lower()
+        if source_type != "f":
+            source_type = "s"
+            break
+        else:
+            break
 
     # Run the solver
     if source_type == "f":
+        # Get user inputs
+        t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations = get_user_input(source_type)
         x, Phi, k, residuals = diffusion_eigenvalue_solver_1D(t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations)
         # Plot the neutron flux
         plt.figure(figsize=(10, 6))
@@ -16,6 +25,8 @@ def main():
         plt.ylabel("Neutron Flux")
         plt.title(f"1D Diffusion Eigenvalue Solver Result (k = {k:.6f})")
     else:
+        # Get user inputs
+        t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, tol, max_iterations = get_user_input(source_type)
         x, Phi, residuals = diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right_boundary, phi_initial, tol, max_iterations)
         # Plot the neutron flux
         plt.figure(figsize=(10, 6))
@@ -30,9 +41,8 @@ def main():
     plt.show()
 
     # Plot the convergence history (residuals)
-    '''
     plt.figure(figsize=(10, 5))
-    plt.plot(range(len(residuals)), residuals, label='Residual', color='r')
+    plt.plot(range(len(residuals[-1])), residuals[-1], label='Residual', color='r')
     plt.title('Residual vs Iteration (Eigenvalue Solver)')
     plt.xlabel('Iteration')
     plt.ylabel('Residual (Error)')
@@ -40,9 +50,8 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.show()
-    '''
 
-def get_user_input():
+def get_user_input(source_type):
     """Prompt user to input main parameters, boundary conditions, and validated material properties."""
 
     # Validate slab thickness (t)
@@ -73,15 +82,6 @@ def get_user_input():
             break
         except ValueError as e:
             print(f"Invalid input: {e}")
-
-    # Determine the type of problem
-    while True:
-        source_type = input("Enter the type of problem (s for fixed source, anything else for fission source): ").strip().lower()
-        if source_type != "s":
-            source_type = "f"
-            break
-        else:
-            break
             
     material_props = []
     last_end = 0  # Track the end position of the last medium
@@ -199,16 +199,16 @@ def get_user_input():
             break
         except ValueError as e:
             print(f"Invalid input: {e}")
-
-    # Validate initial guess for eigenvalue k
-    while True:
-        try:
-            k_initial = float(input("Enter the initial guess for eigenvalue k: "))
-            if k_initial <= 0:
-                raise ValueError("Eigenvalue k must be greater than 0.")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+    if source_type == "f":
+        # Validate initial guess for eigenvalue k
+        while True:
+            try:
+                k_initial = float(input("Enter the initial guess for eigenvalue k: "))
+                if k_initial <= 0:
+                    raise ValueError("Eigenvalue k must be greater than 0.")
+                break
+            except ValueError as e:
+                print(f"Invalid input: {e}")
 
     # Validate convergence tolerance
     while True:
@@ -230,7 +230,11 @@ def get_user_input():
         except ValueError as e:
             print(f"Invalid input: {e}")
 
-    return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations, source_type
+     
+    if source_type == "f":
+        return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations
+    else:
+        return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, tol, max_iterations
 
 def diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right_boundary, phi_initial, tol=1e-6, max_iterations=1000000):
     """
