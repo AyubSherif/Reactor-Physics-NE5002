@@ -2,48 +2,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel, Jacobi_solver_vectorized
 
-def main():
-
-    # Determine the type of problem
-    while True:
-        source_type = input("Enter the type of problem (f for fission source, anything else for fixed source): ").strip().lower()
-        if source_type != "f":
-            source_type = "s"
-            break
-        else:
-            break
-
-    # Run the solver
-    if source_type == "f":
-        # Get user inputs
-        t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations = get_user_input(source_type)
-        x, Phi, k, residuals = diffusion_eigenvalue_solver_1D(t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations)
-        # Plot the neutron flux
-        plt.figure(figsize=(10, 6))
-        plt.plot(x, Phi, label='Neutron Flux', color='b')
-        plt.xlabel("Position")
-        plt.ylabel("Neutron Flux")
-        plt.title(f"1D Diffusion Eigenvalue Solver Result (k = {k:.6f})")
-    else:
-        # Get user inputs
-        t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, tol, max_iterations = get_user_input(source_type)
-        x, Phi, residuals = diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right_boundary, phi_initial, tol, max_iterations)
-        # Plot the neutron flux
-        plt.figure(figsize=(10, 6))
-        plt.plot(x, Phi, label='Neutron Flux', color='b')
-        plt.xlabel("Position")
-        plt.ylabel("Neutron Flux")
-        plt.title(f"1D Diffusion Solver")
-
-    
+def plot_results(x, Phi, residuals, solver_type, k=None):
+    """Plots the neutron flux and residuals."""
+    # Plot the neutron flux
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, Phi, label='Neutron Flux', color='b')
+    plt.xlabel("Position")
+    plt.ylabel("Neutron Flux")
+    title = f"1D Diffusion Eigenvalue Solver (k = {k:.6f})" if solver_type == "fission" else "1D Diffusion Solver"
+    plt.title(title)
     plt.legend()
     plt.grid(True)
     plt.show()
 
     # Plot the convergence history (residuals)
     plt.figure(figsize=(10, 5))
-    plt.plot(range(len(residuals[-1])), residuals[-1], label='Residual', color='r')
-    plt.title('Residual vs Iteration (Eigenvalue Solver)')
+    plt.plot(range(len(residuals)), residuals, label='Residual', color='r')
+    plt.title('Residual vs Iteration')
     plt.xlabel('Iteration')
     plt.ylabel('Residual (Error)')
     plt.yscale('log')
@@ -51,190 +26,124 @@ def main():
     plt.grid(True)
     plt.show()
 
+def main():
+    # Determine the type of problem
+    source_type = input("Enter the type of problem (f for fission source, anything else for fixed source): ").strip().lower()
+    source_type = "f" if source_type == "f" else "s"
+
+    # Get user inputs
+    if source_type == "f":
+        t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations = get_user_input(source_type)
+        # Solve the eigenvalue problem
+        x, Phi, k, residuals = diffusion_eigenvalue_solver_1D(
+            t, num_mesh_points, left_boundary, right_boundary,
+            material_props, phi_initial, k_initial, tol, max_iterations
+        )
+        # Plot results
+        plot_results(x, Phi, residuals, solver_type="fission", k=k)
+    else:
+        t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, tol, max_iterations = get_user_input(source_type)
+        # Solve the fixed source problem
+        x, Phi, residuals = diffusion_solver_1D(
+            t, num_mesh_points, material_props, left_boundary, right_boundary,
+            phi_initial, tol, max_iterations
+        )
+        # Plot results
+        plot_results(x, Phi, residuals, solver_type="fixed")
+
+    
 def get_user_input(source_type):
     """Prompt user to input main parameters, boundary conditions, and validated material properties."""
 
-    # Validate slab thickness (t)
-    while True:
-        try:
-            t = float(input("Enter the total slab thickness: "))
-            if t <= 0:
-                raise ValueError("Slab thickness must be greater than 0.")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+    def get_positive_float(prompt, error_msg="Value must be greater than 0."):
+        while True:
+            try:
+                value = float(input(prompt))
+                if value <= 0:
+                    raise ValueError(error_msg)
+                return value
+            except ValueError as e:
+                print(f"Invalid input: {e}")
 
-    # Validate boundary conditions with "r" for reflective and default to vacuum for any other input
-    left_boundary = input("Enter the left boundary condition (r for reflective, anything else for vacuum): ").strip().lower()
-    if left_boundary != "r":
-        left_boundary = "v"
+    def get_positive_int(prompt, error_msg="Value must be greater than 0."):
+        while True:
+            try:
+                value = int(input(prompt))
+                if value <= 0:
+                    raise ValueError(error_msg)
+                return value
+            except ValueError as e:
+                print(f"Invalid input: {e}")
 
-    right_boundary = input("Enter the right boundary condition (r for reflective, anything else for vacuum): ").strip().lower()
-    if right_boundary != "r":
-        right_boundary = "v"
+    def get_ratio(prompt, error_msg="Value must be between 0 and 1."):
+        while True:
+            try:
+                value = float(input(prompt))
+                if not (0 <= value <= 1):
+                    raise ValueError(error_msg)
+                return value
+            except ValueError as e:
+                print(f"Invalid input: {e}")
 
-    # Validate number of media
-    while True:
-        try:
-            num_media = int(input("Enter the number of media: "))
-            if num_media <= 0:
-                raise ValueError("Number of media must be greater than 0.")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
-            
+    def get_boundary_condition(prompt):
+        condition = input(prompt).strip().lower()
+        return "r" if condition == "r" else "v"
+
+    t = get_positive_float("Enter the total slab thickness: ")
+    left_boundary = get_boundary_condition("Enter the left boundary condition (r for reflective, anything else for vacuum): ")
+    right_boundary = get_boundary_condition("Enter the right boundary condition (r for reflective, anything else for vacuum): ")
+    num_media = get_positive_int("Enter the number of media: ")
+
     material_props = []
-    last_end = 0  # Track the end position of the last medium
+    last_end = 0
 
     for i in range(num_media):
         print(f"\nEnter properties for medium {i + 1}:")
-
-        # Set start position for each medium
         start = last_end
+        end = t if i == num_media - 1 else get_positive_float(
+            f"  End position for medium {i + 1} (greater than {start} and up to {t}): ",
+            error_msg=f"End position must be greater than {start} and within the slab thickness ({t}).",
+        )
 
-        # For the last material, it ends at the total thickness `t`
-        if i == num_media - 1:
-            end = t
-        else:
-            # Validate end position
-            while True:
-                try:
-                    end = float(input(f"  End position for medium {i + 1} (cm): "))
-                    if end <= start or end > t:
-                        raise ValueError(f"End position must be greater than {start} and within the slab thickness up to {t}.")
-                    break
-                except ValueError as e:
-                    print(f"Invalid input: {e}")
+        sigma_t = get_positive_float("  Total cross-section (sigma_t): ")
+        sigma_s_to_sigma_t_ratio = get_ratio("  Scattering to total cross-section ratio (0 ≤ value ≤ 1): ")
 
-        # Validate cross-sections
-        while True:
-            try:
-                sigma_t = float(input("  Total cross-section (sigma_t): "))
-                if sigma_t <= 0:
-                    raise ValueError("Total cross-section (sigma_t) must be greater than 0.")
-                break
-            except ValueError as e:
-                print(f"Invalid input: {e}")
-
-        while True:
-            try:
-                sigma_s_to_sigma_t_ratio = float(input("  Scattering to total cross-section ratio (sigma_s_to_sigma_t_ratio): "))
-                if not (0 <= sigma_s_to_sigma_t_ratio <= 1):
-                    raise ValueError("Scattering ratio must be between 0 and 1.")
-                break
-            except ValueError as e:
-                print(f"Invalid input: {e}")
         if source_type == "f":
-            # Validate fission to absorption cross-section ratio
-            while True:
-                try:
-                    sigma_f_to_sigma_a_ratio = float(
-                        input("  Fission to absorption cross-section ratio (sigma_f to sigma_a ratio): ")
-                    )
-                    if not (0 <= sigma_f_to_sigma_a_ratio <= 1):
-                        raise ValueError("The ratio must be between 0 and 1.")
-                    break
-                except ValueError as e:
-                    print(f"Invalid input: {e}")
-
-            if sigma_f_to_sigma_a_ratio == 0:  # Automatically set nu to 0 if sigma_f is 0
-                nu = 0.0
-            else:
-                # Validate neutron yield (v, nu)
-                while True:
-                    try:
-                        nu = float(input(f"  Neutron yield (v) for medium {i + 1}: "))
-                        if nu <= 0:
-                            raise ValueError("Neutron yield (v) must be greater than 0.")
-                        break
-                    except ValueError as e:
-                        print(f"Invalid input: {e}")
-        else:
-            # Validate fixed source strength for the medium
-            while True:
-                try:
-                    S_i = float(input(f"  Fixed source strength (S) for medium {i + 1}: "))
-                    if S_i < 0:
-                        raise ValueError("Fixed source strength (S) must be greater than or equal to 0.")
-                    break
-                except ValueError:
-                    print("Invalid input: Fixed source strength must be a number.")
-        
-        # Append material properties
-        if source_type == "f":
-            
+            sigma_f_to_sigma_a_ratio = get_ratio("  Fission to absorption cross-section ratio (0 ≤ value ≤ 1): ")
+            nu = 0.0 if sigma_f_to_sigma_a_ratio == 0 else get_positive_float("  Neutron yield (v): ")
             material_props.append({
-                'start': start, 
-                'end': end, 
-                'sigma_t': sigma_t, 
-                'sigma_s_to_sigma_t_ratio': sigma_s_to_sigma_t_ratio, 
+                'start': start,
+                'end': end,
+                'sigma_t': sigma_t,
+                'sigma_s_to_sigma_t_ratio': sigma_s_to_sigma_t_ratio,
                 'sigma_f_to_sigma_a_ratio': sigma_f_to_sigma_a_ratio,
                 'nu': nu
             })
         else:
+            S_i = get_positive_float("  Fixed source strength (S): ", error_msg="Value must be greater than or equal to 0.")
             material_props.append({
-                'start': start, 
-                'end': end, 
-                'sigma_t': sigma_t, 
-                'sigma_s_to_sigma_t_ratio': sigma_s_to_sigma_t_ratio, 
+                'start': start,
+                'end': end,
+                'sigma_t': sigma_t,
+                'sigma_s_to_sigma_t_ratio': sigma_s_to_sigma_t_ratio,
                 'S': S_i
             })
 
-        last_end = end  # Update end for the next material's start
+        last_end = end
 
-    # Validate number of mesh points
-    while True:
-        try:
-            num_mesh_points = int(input("Enter the number of mesh points: "))
-            if num_mesh_points <= 0:
-                raise ValueError("Number of mesh points must be greater than 0.")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+    num_mesh_points = get_positive_int("Enter the number of mesh points: ")
+    phi_initial = get_positive_float("Enter initial guess for flux distribution (phi): ")
 
-    # Validate initial guess for flux distribution (phi)
-    while True:
-        try:
-            phi_initial = float(input("Enter initial guess for flux distribution (phi): "))
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
     if source_type == "f":
-        # Validate initial guess for eigenvalue k
-        while True:
-            try:
-                k_initial = float(input("Enter the initial guess for eigenvalue k: "))
-                if k_initial <= 0:
-                    raise ValueError("Eigenvalue k must be greater than 0.")
-                break
-            except ValueError as e:
-                print(f"Invalid input: {e}")
-
-    # Validate convergence tolerance
-    while True:
-        try:
-            tol = float(input("Enter the convergence tolerance: "))
-            if tol <= 0:
-                raise ValueError("Tolerance must be greater than 0.")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
-
-    # Validate maximum number of iterations
-    while True:
-        try:
-            max_iterations = int(input("Enter the maximum number of iterations: "))
-            if max_iterations <= 0:
-                raise ValueError("Maximum number of iterations must be greater than 0.")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}")
-
-     
-    if source_type == "f":
+        k_initial = get_positive_float("Enter the initial guess for eigenvalue k: ")
+        tol = get_positive_float("Enter the convergence tolerance: ")
+        max_iterations = get_positive_int("Enter the maximum number of iterations: ")
         return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations
     else:
+        tol = get_positive_float("Enter the convergence tolerance: ")
+        max_iterations = get_positive_int("Enter the maximum number of iterations: ")
         return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, tol, max_iterations
+
 
 def diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right_boundary, phi_initial, tol=1e-6, max_iterations=1000000):
     """
@@ -336,9 +245,7 @@ def diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right
 
     return x, Phi, residuals
 
-def diffusion_eigenvalue_solver_1D(
-    t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol=1e-6, max_iterations=1000000
-):
+def diffusion_eigenvalue_solver_1D(t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol=1e-6, max_iterations=1000000):
     """
     1D diffusion eigenvalue solver for heterogeneous media with user-defined boundary conditions.
     
@@ -406,7 +313,7 @@ def diffusion_eigenvalue_solver_1D(
         # Update the source term
         fission_source = np.zeros(new_num_mesh_points)
         for i in range(1, new_num_mesh_points - 1):
-            fission_source[i] = ((nu[i] * sigma_f[i] + nu[i + 1] * sigma_f[i + 1]) / 2.0) * Phi[i]
+            fission_source[i] = nu[i] * sigma_f[i] * Phi[i]
 
         b_new = fission_source / k
 
@@ -439,13 +346,14 @@ def diffusion_eigenvalue_solver_1D(
             main_diag[-1] = 1
             b_new[-1] = 0
 
-        # Solve the linear system
+        # Solve using Gauss-Seidel method
         Phi_new, res = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b_new, Phi, tol, max_iterations)
         residuals.append(res)
 
+        # Calculate new fission source
         new_fission_source = np.zeros(new_num_mesh_points)
         for i in range(1, new_num_mesh_points - 1):
-            new_fission_source[i] = ((nu[i] * sigma_f[i] + nu[i + 1] * sigma_f[i + 1]) / 2.0) * Phi_new[i]
+            new_fission_source[i] = nu[i] * sigma_f[i] * Phi_new[i]
 
         # Update k
         k_new = k * np.sum(new_fission_source) / np.sum(fission_source)
@@ -457,7 +365,7 @@ def diffusion_eigenvalue_solver_1D(
         # Update flux
         Phi = Phi_new
 
-    return x, Phi, k, residuals
+    return x, Phi, k, residuals[-1]
 
 
 # Run the main function only if this script is executed directly
