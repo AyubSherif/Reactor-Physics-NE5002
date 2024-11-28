@@ -1,6 +1,37 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from iterative_solvers import Gauss_Seidel_optimized, Jacobi_solver, Jacobi_solver_parallel, Jacobi_solver_vectorized
+import datetime
+
+def write_to_file(content):
+        """Helper function to write content to the file."""
+        with open("data.txt", "a") as file:
+            file.write(content + "\n")
+
+def version_data():
+    # Define the details
+    code_name = "Monoenergetic 1D Diffusion Solver for Eigenvalue Problems"
+    version_number = 5
+    author_name = "Ayub Sherif"
+    execution_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Create the version data as a formatted string
+    version_data = (
+        f"Code Name: {code_name}\n"
+        f"Version: {version_number}\n"
+        f"Author: {author_name}\n"
+        f"Date and Time of Execution: {execution_time}\n"
+    )
+
+    # Print to screen
+    print(version_data)
+
+    # Write to an output file
+    write_to_file(version_data)
+
+    print(f"Input and output data is written to data.txt.")
+
+
 
 def plot_results(x, Phi, residuals, solver_type, k=None):
     """Plots the neutron flux and residuals."""
@@ -27,6 +58,8 @@ def plot_results(x, Phi, residuals, solver_type, k=None):
     plt.show()
 
 def main():
+    version_data()
+
     # Determine the type of problem
     source_type = input("Enter the type of problem (f for fission source, anything else for fixed source): ").strip().lower()
     source_type = "f" if source_type == "f" else "s"
@@ -96,6 +129,7 @@ def get_user_input(source_type):
 
     material_props = []
     last_end = 0
+    material_details = ""
 
     for i in range(num_media):
         print(f"\nEnter properties for medium {i + 1}:")
@@ -119,6 +153,15 @@ def get_user_input(source_type):
                 'sigma_f_to_sigma_a_ratio': sigma_f_to_sigma_a_ratio,
                 'nu': nu
             })
+            material_details += (
+                f"Medium {i + 1}:\n"
+                f"  Start: {start}\n"
+                f"  End: {end}\n"
+                f"  sigma_t: {sigma_t}\n"
+                f"  Scattering Ratio: {sigma_s_to_sigma_t_ratio}\n"
+                f"  Fission Ratio: {sigma_f_to_sigma_a_ratio}\n"
+                f"  Neutron Yield: {nu}\n"
+            )
         else:
             S_i = get_positive_float("  Fixed source strength (S): ", error_msg="Value must be greater than or equal to 0.")
             material_props.append({
@@ -128,6 +171,14 @@ def get_user_input(source_type):
                 'sigma_s_to_sigma_t_ratio': sigma_s_to_sigma_t_ratio,
                 'S': S_i
             })
+            material_details += (
+                f"Medium {i + 1}:\n"
+                f"  Start: {start}\n"
+                f"  End: {end}\n"
+                f"  sigma_t: {sigma_t}\n"
+                f"  Scattering Ratio: {sigma_s_to_sigma_t_ratio}\n"
+                f"  Source Strength: {S_i}\n"
+            )
 
         last_end = end
 
@@ -138,10 +189,37 @@ def get_user_input(source_type):
         k_initial = get_positive_float("Enter the initial guess for eigenvalue k: ")
         tol = get_positive_float("Enter the convergence tolerance: ")
         max_iterations = get_positive_int("Enter the maximum number of iterations: ")
+        user_input = (
+            f"Problem Type: Fission\n"
+            f"Slab Thickness: {t}\n"
+            f"Left Boundary: {'Reflective' if left_boundary == 'r' else 'Vacuum'}\n"
+            f"Right Boundary: {'Reflective' if right_boundary == 'r' else 'Vacuum'}\n"
+            f"Number of Media: {num_media}\n"
+            f"{material_details}"
+            f"Mesh Points: {num_mesh_points}\n"
+            f"Initial Flux: {phi_initial}\n"
+            f"Initial Eigenvalue (k): {k_initial}\n"
+            f"Tolerance: {tol}\n"
+            f"Max Iterations: {max_iterations}\n"
+        )
+        write_to_file(user_input)
         return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, k_initial, tol, max_iterations
     else:
         tol = get_positive_float("Enter the convergence tolerance: ")
         max_iterations = get_positive_int("Enter the maximum number of iterations: ")
+        user_input = (
+            f"Problem Type: Fixed Source\n"
+            f"Slab Thickness: {t}\n"
+            f"Left Boundary: {'Reflective' if left_boundary == 'r' else 'Vacuum'}\n"
+            f"Right Boundary: {'Reflective' if right_boundary == 'r' else 'Vacuum'}\n"
+            f"Number of Media: {num_media}\n"
+            f"{material_details}"
+            f"Mesh Points: {num_mesh_points}\n"
+            f"Initial Flux: {phi_initial}\n"
+            f"Tolerance: {tol}\n"
+            f"Max Iterations: {max_iterations}\n"
+        )
+        write_to_file(user_input)
         return t, num_mesh_points, left_boundary, right_boundary, material_props, phi_initial, tol, max_iterations
 
 
@@ -242,6 +320,17 @@ def diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right
 
     # Solve using Gauss-Seidel method
     Phi, residuals = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b, Phi, tol, max_iterations)
+
+        # Prepare output data
+    output_data = (
+        f"Results:\n"
+        f"Neutron Flux (Phi):\n{Phi}\n"
+        f"Spatial Domain (x):\n{x}\n"
+    )
+
+    # Write the output data to a file
+    write_to_file(output_data)
+
 
     return x, Phi, residuals
 
@@ -364,6 +453,17 @@ def diffusion_eigenvalue_solver_1D(t, num_mesh_points, left_boundary, right_boun
 
         # Update flux
         Phi = Phi_new
+    
+    # Prepare output data
+    output_data = (
+        f"Results:\n"
+        f"Final Eigenvalue (k): {k:.6f}\n"
+        f"Neutron Flux (Phi):\n{Phi}\n"
+        f"Spatial Domain (x):\n{x}\n"
+    )
+
+    # Write the output data to a file
+    write_to_file(output_data)
 
     return x, Phi, k, residuals[-1]
 
