@@ -92,7 +92,7 @@ def get_user_input(source_type):
         while True:
             try:
                 value = float(input(prompt))
-                if value <= 0:
+                if value < 0:
                     raise ValueError(error_msg)
                 return value
             except ValueError as e:
@@ -102,7 +102,7 @@ def get_user_input(source_type):
         while True:
             try:
                 value = int(input(prompt))
-                if value <= 0:
+                if value < 0:
                     raise ValueError(error_msg)
                 return value
             except ValueError as e:
@@ -313,10 +313,6 @@ def diffusion_solver_1D(t, num_mesh_points, material_props, left_boundary, right
 
     # Initial guess for neutron flux
     Phi = np.full(new_num_mesh_points, phi_initial)
-    A = np.zeros((new_num_mesh_points, new_num_mesh_points))
-    np.fill_diagonal(A, main_diag)  # Fill main diagonal
-    np.fill_diagonal(A[1:], lower_diag)  # Fill lower diagonal
-    np.fill_diagonal(A[:, 1:], upper_diag)  # Fill upper diagonal
 
     # Solve using Gauss-Seidel method
     Phi, residuals = Gauss_Seidel_optimized(lower_diag, main_diag, upper_diag, b, Phi, tol, max_iterations)
